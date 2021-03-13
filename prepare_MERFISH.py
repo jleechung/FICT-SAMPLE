@@ -24,7 +24,7 @@ def main():
         raise FileNotFoundError("MERFISH full matrix file can't be found, please download it first.")
     save_f = "Benchmark/MERFISH/data/"
     os.makedirs(save_f,exist_ok=True)
-    smfishHmrf_save = "Benchmark/Merfish/data/"
+    smfishHmrf_save = "Benchmark/MERFISH/data/"
     ### Data preprocessing
     print("Reading data from %s"%(data_f))
     if data_f.endswith('.xlsx'):
