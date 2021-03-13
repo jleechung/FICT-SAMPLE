@@ -7,6 +7,10 @@ cd FICT-SAMPLE
 git clone https://github.com/haotianteng/FICT
 git clone https://github.com/haotianteng/GECT
 export PYTHONPATH="$(pwd)/FICT/:$(pwd)/GECT/:$PYTHONPATH"
+```
+**Install dependency**
+```bash
+conda activate YOUR_ENVIRONMENT
 pip install -r requirements.txt
 ```
 
