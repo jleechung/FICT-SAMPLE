@@ -1,0 +1,10 @@
+openpyxl
+pandas
+pickle
+numpy
+seaborn
+json
+matplotlib
+sklearn
+anndata
+h5py

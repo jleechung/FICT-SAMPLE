@@ -165,12 +165,12 @@ def accuracy_with_perm(predict,label,perm):
     accur = np.sum([(predict == p) * (label == i) for i,p in enumerate(perm)])
     return accur
 
-def main(sim_data,base_f,run_idx):
+def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells = sim_data
     mask = np.zeros(len(sim_cell_type),dtype = np.bool)
     mask[mix_cells] = True
-    reduced_d = 10
-    k_n = 5
+    reduced_d = reduced_dimension
+    k_n = n_cell_type
     ### train a embedding model from the simulated gene expression
     print("Begin training the embedding model.")
     np.savez(os.path.join(base_f,'sim_gene.npz'),
@@ -372,12 +372,16 @@ def main(sim_data,base_f,run_idx):
     return (ari_gene,ari_sg),(accur,accr_sg)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='dummy_train',
+    parser = argparse.ArgumentParser(prog='FICT-SAMPLE',
                                      description='Train on simuulation data.')
     parser.add_argument('-p', '--prefix', required = True,
                         help="The prefix of the input dataset.")
     parser.add_argument('-n',default = 50,type = int,
-                        help="The resolution factor of Leiden clustering.")
+                        help="The number of repeation.")
+    parser.add_argument('--n_type',default = 3, type = int,
+                        help="Number of cell types.")
+    parser.add_argument('--hidden',default = 10,type = int,
+                        help="Hidden size of the denoise auto-encoder.")
     args = parser.parse_args(sys.argv[1:])
     RUN_TIME = args.n
     aris_gene = []
@@ -394,8 +398,8 @@ if __name__ == "__main__":
     with open(os.path.join(base_f,'simulator.bin'),'rb') as f:
         sim = pickle.load(f)
         
-    ### mix the gene profile of 2nd and 3rd cell type and generate gene expression
-    mix_cell_t = [0,2,4]
+    ### mix the gene profile
+    mix_cell_t = [0,1]
     seed_list = [random.randrange(2**32 - 1) for _ in np.arange(RUN_TIME)]
     for run_i in np.arange(RUN_TIME):
         print("Start the %d simulation"%(run_i))
@@ -403,7 +407,7 @@ if __name__ == "__main__":
         sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells=mix
         print(sim_gene_expression.shape)
         sim_data = (sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells)
-        aris,accrs = main(sim_data,base_f,run_i)
+        aris,accrs = main(sim_data,base_f,run_i,n_cell_type=args.n_type,reduced_dimension=args.hidden)
         aris_gene.append(aris[0])
         aris_sg.append(aris[1])
         accs_gene.append(accrs[0])
