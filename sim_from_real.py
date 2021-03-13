@@ -6,18 +6,14 @@ Created on Thu Mar 26 15:41:29 2020
 @author: heavens
 """
 from fict.utils.joint_simulator import Simulator
-from fict.utils.joint_simulator import SimDataLoader
 from fict.utils.joint_simulator import get_gene_prior
 from fict.utils.joint_simulator import get_nf_prior
 from fict.utils.opt import valid_neighbourhood_frequency
-from fict.utils.scsim import Scsim
-from sklearn.metrics.cluster import adjusted_rand_score
 from sklearn import manifold
-from fict.fict_input import RealDataLoader
-from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 import pickle
-import time
+import sys
+import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -199,6 +195,11 @@ def simulation(sample_n = 2000,
         plt.plot(nb_reduced[sim_cell_type==i,0],nb_reduced[sim_cell_type==i,1],'.',c = colors[i])
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog='Simulation FISH data.',
+                                     description='Train on simuulation data.')
+    parser.add_argument('--n_type',default = 3,type = int,
+                        help="The number of cell type.")
+    args = parser.parse_args(sys.argv[1:])
     for method in np.arange(3):
         simulation(method = method,
-                   n_c = 5)
+                   n_c = args.n_type)
