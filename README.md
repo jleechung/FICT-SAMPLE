@@ -17,7 +17,7 @@ pip install -r requirements.txt
 ### Preparing datasets
 **osmFISH**: datasets/osmFISH_SScortex_mouse_all_cells.loom  
 **seqFISH**: datasets/seqFISH/{fcortex.coordinates, fcortex.expression, fcortex.genes}  
-**MERFISH**: datasets/aau5324_Moffitt_Table-S7.xlsx
+**MERFISH**: datasets/aau5324_Moffitt_Table-S7.xlsx  
 *Download full MERFISH data matrix *Moffitt_and_Bambah-Mukku_et_al_merfish_all_cells.csv* from [here](https://datadryad.org/stash/dataset/doi:10.5061/dryad.8t8s248).
 Unzip it to the datasets folder.
 
