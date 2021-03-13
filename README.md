@@ -2,6 +2,8 @@
 
 ### Installation
 ```bash
+git clone https://github.com/haotianteng/FICT-SAMPLE.git
+cd FICT-SAMPLE
 git clone https://github.com/haotianteng/FICT
 git clone https://github.com/haotianteng/GECT
 export PYTHONPATH="$(pwd)/FICT/:$(pwd)/GECT/:$PYTHONPATH"
