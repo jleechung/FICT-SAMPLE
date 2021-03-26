@@ -10,8 +10,6 @@ import pickle
 import seaborn as sns
 import json
 from fict.fict_model import FICT_EM
-from fict.utils.data_op import pca_reduce
-from fict.utils.data_op import embedding_reduce
 from fict.utils.data_op import save_smfish
 from fict.utils.data_op import save_loader
 from fict.utils import embedding as emb
@@ -20,21 +18,21 @@ from sklearn.metrics.cluster import adjusted_rand_score
 from sklearn import manifold
 from matplotlib import pyplot as plt
 from fict.utils.data_op import one_hot_vector
-from mpl_toolkits.mplot3d import Axes3D
 from fict.fict_input import RealDataLoader
 from fict.fict_train import permute_accuracy
-from fict.fict_train import train
 from gect.gect_train_embedding import train_wrapper
 from fict.fict_train import alternative_train
+import multiprocessing as mp
+from multiprocessing import Process
+import queue
 import sys
 import os
 import argparse
 import random
 import warnings
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
 from scipy.stats import ttest_ind
+from typing import Callable,Dict,List
 plt.rcParams["font.size"] = "25"
 
 TRAIN_CONFIG = {'gene_phase':{},'spatio_phase':{}}
@@ -50,9 +48,10 @@ TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
                                 'prior_factor':0.0,
                                 'nearest_k':None,
                                 'threshold_distance':1,
-                                'renew_rounds':5,
+                                'renew_rounds':20,
                                 'partial_update':0.1,
                                 'equal_contribute':False}
+QUEUE_TIMEOUT = 1 #Wait for 1 second for the queue to raise empty exception.
 
 def load_train(data_loader,num_class = None):
     int_y,tags = tag2int(data_loader.y)
@@ -82,7 +81,7 @@ def load_train(data_loader,num_class = None):
                       train_config = TRAIN_CONFIG)
     return model
 
-def mix_gene_profile(simulator, indexs,gene_proportion=1.0,cell_proportion = 0.6,seed = None):
+def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.6,seed = None):
     """mix the gene expression profile of cell types in indexs
     Args:
         simulator: A Simualator instance.
@@ -140,9 +139,8 @@ def _plot_freq(neighbour,axes,color,cell_tag):
     axes.errorbar(x+1,mean,color = color,label = cell_tag)
     return mean,yerror
 
-def plot_freq(nb_count,cell_label,plot_class):
+def plot_freq(nb_count,cell_label,plot_class,axs):
     type_n = len(plot_class)
-    fig,axs = plt.subplots()
     colors = ['red','green','blue','yellow','purple']
     for i,cell_idx in enumerate(plot_class):
         freq_true,yerror = _plot_freq(nb_count[cell_label == cell_idx],
@@ -151,17 +149,15 @@ def plot_freq(nb_count,cell_label,plot_class):
                                      cell_tag = plot_class[i])
     nb_freqs = np.zeros((type_n,type_n))
     for i in np.arange(type_n):
-        parital_nb = sim_cell_neighbour[sim_cell_type==i]
+        parital_nb = nb_count[cell_label==i]
         freq = parital_nb/np.sum(parital_nb,axis = 1,keepdims = True)
         nb_freqs[i,:] = np.mean(freq,axis = 0)
     title_str = "Generated neighbourhood frequency of cell"+ ",".join([str(x) for x in plot_class])
-    plt.title(title_str)
-    plt.xlabel("Cell type")
-    plt.ylabel("Frequency")
-    plt.show()
+    axs.set_title(title_str)
+    axs.set_xlabel("Cell type")
+    axs.set_ylabel("Frequency")
 
 def accuracy_with_perm(predict,label,perm):
-    n = len(predict)
     accur = np.sum([(predict == p) * (label == i) for i,p in enumerate(perm)])
     return accur
 
@@ -187,16 +183,19 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     args.batch_size = sim_gene_expression.shape[0]
     args.step_rate=4e-3
     args.drop_out = 0.9
-    args.epoches = 300
+    args.epoches = 150
     args.retrain = False
     args.device = None
+    fig_collection = {}
     train_wrapper(args)
     embedding_file = os.path.join(base_f,'simulate_embedding/')
     embedding = emb.load_embedding(embedding_file)
     
     ### Dimensional reduction of simulated gene expression using PCA or embedding
     class_n,gene_n = sim.g_mean.shape
-    plot_freq(sim_cell_neighbour,sim_cell_type,np.arange(class_n))
+    fig,axs = plt.subplots()
+    plot_freq(sim_cell_neighbour,sim_cell_type,np.arange(class_n),axs)
+    fig_collection['Frequency_plot.png'] = fig
     arti_posterior = one_hot_vector(sim_cell_type)[0]
     int_type,tags = tag2int(sim_cell_type)
     np.random.shuffle(arti_posterior)
@@ -207,6 +206,11 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
                                  cell_labels = sim_cell_type,
                                  gene_list = np.arange(sim_gene_expression.shape[1]))
     data_loader.dim_reduce(method = "Embedding",embedding = embedding)
+    
+    # ## Debugging code
+    # return data_loader
+    # ##
+    
     data_folder = os.path.join(base_f,'data/')
     if not os.path.isdir(data_folder):
         os.mkdir(data_folder)
@@ -225,6 +229,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     ### Begin the plot
     plt.close('all')
     fig = plt.figure(figsize = (20,10))
+    fig_collection['3d_type_neighbourhood.png'] = fig
     ax = fig.add_subplot(111, projection='3d')
     nb_reduced = manifold.TSNE().fit_transform(sim_cell_neighbour)
     color_map = np.asarray(['r','g','b','yellow','purple'])
@@ -238,6 +243,8 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     colors = ['red','green','blue','yellow','purple']
     figs,axs = plt.subplots(nrows = 2,ncols =2,figsize = (20,10))
     figs2,axs2 = plt.subplots(nrows = 2,ncols = 2,figsize=(20,10))
+    fig_collection['hits.png'] = figs
+    fig_collection['predictions.png'] = figs2
     ax = axs[0][0]
     scatter = axs[0][0].scatter(nb_reduced[:,0],
                                 nb_reduced[:,1],
@@ -363,33 +370,41 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
         accurs.append(permute_accuracy(predict_sg,sim_cell_type)[0])
         lls.append(ll)
     idx = np.argmax(accurs)
-    plt.figure()
+    fig = plt.figure()
+    fig_collection['Accuracy_spatio_factor.png'] = fig
     plt.plot(spatio_factors,accurs)
     plt.xlabel("The spatio factor(gene factor is 1)")
     plt.ylabel("The permute accuracy.")
     plt.title("The permute accuracy across different spatio factor.")
     print("Best accuracy of gene+spatio model %.3f, with spatio factor %.3f"%(accurs[idx],spatio_factors[idx]))
+    for fig_n, fig in fig_collection.items():
+        fig.savefig(os.path.join(result_f,fig_n))
     return (ari_gene,ari_sg),(accur,accr_sg)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='FICT-SAMPLE',
                                      description='Train on simuulation data.')
     parser.add_argument('-p', '--prefix', required = True,
-                        help="The prefix of the input dataset.")
-    parser.add_argument('-n',default = 50,type = int,
-                        help="The number of repeation.")
+                        help="The prefix of the input dataset, for simulation data, it's the folder contains simulator.bin file.")
+    parser.add_argument('-n',default = 30,type = int,
+                        help="The time of repeation.")
     parser.add_argument('--n_type',default = 3, type = int,
                         help="Number of cell types.")
     parser.add_argument('--hidden',default = 10,type = int,
                         help="Hidden size of the denoise auto-encoder.")
+    parser.add_argument('--n_process', default = None, type = int,
+                        help="Number of processes to use.")
+    parser.add_argument('--mix_ratio', default = 0.99, type = float,
+                        help="The ratio ")
     args = parser.parse_args(sys.argv[1:])
     RUN_TIME = args.n
-    aris_gene = []
-    aris_spatio = []
-    aris_sg = []
-    accs_gene = []
-    accs_spatio = []
-    accs_sg = []
+    n_threads = args.n_process
+    items_to_run = np.arange(RUN_TIME)
+    record = {}
+    record['aris_gene'] = []
+    record['aris_sg'] = []
+    record['accs_gene'] = []
+    record['accs_sg'] = []
     base_f = args.prefix
     print("Begin simulation %d times."%(RUN_TIME))
     if not sys.warnoptions:
@@ -400,23 +415,91 @@ if __name__ == "__main__":
         
     ### mix the gene profile
     mix_cell_t = [0,1]
-    seed_list = [random.randrange(2**32 - 1) for _ in np.arange(RUN_TIME)]
-    for run_i in np.arange(RUN_TIME):
-        print("Start the %d simulation"%(run_i))
-        mix = mix_gene_profile(sim,mix_cell_t,seed = seed_list[run_i])
-        sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells=mix
-        print(sim_gene_expression.shape)
-        sim_data = (sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells)
-        aris,accrs = main(sim_data,base_f,run_i,n_cell_type=args.n_type,reduced_dimension=args.hidden)
-        aris_gene.append(aris[0])
-        aris_sg.append(aris[1])
-        accs_gene.append(accrs[0])
-        accs_sg.append(accrs[1])
-    record = {}
-    record['aris_gene'] = aris_gene
-    record['aris_sg'] = aris_sg
-    record['accs_gene'] = accs_gene
-    record['accs_sg'] = accs_sg
+    seed_list = [random.randrange(2**32 - 1) for _ in np.arange(RUN_TIME)]   
+    # ### Debugging code
+    # run_i = 0
+    # mix = mix_gene_profile(sim,
+    #                        mix_cell_t,
+    #                        gene_proportion = args.mix_ratio,
+    #                        seed = seed_list[run_i])
+    # sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells=mix
+    # sim_data = (sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells)
+    # loader = main(sim_data,base_f,run_i,n_cell_type=args.n_type,reduced_dimension=args.hidden)
+    # import umap
+    # reducer = umap.UMAP()
+    # rg = loader.reduced_gene_expression
+    # rg = (rg-np.mean(rg,axis = 0))/np.std(rg,axis = 0)
+    # y = reducer.fit_transform(rg)
+    # fig1,axs = plt.subplots()
+    # axs.scatter(y[:,0],y[:,1],c = loader.cell_labels,s = 1)
+    
+    # g = loader.gene_expression
+    # g = (g-np.mean(g,axis = 0))/np.std(g,axis = 0)
+    # y = reducer.fit_transform(g)
+    # fig2,axs = plt.subplots()
+    # axs.scatter(y[:,0],y[:,1],c = loader.cell_labels,s =  1)
+    
+    # from sklearn.model_selection import train_test_split
+    # X_train, X_test, y_train, y_test = train_test_split(g,loader.cell_labels,test_size = 0.2)
+    # from sklearn.ensemble import RandomForestClassifier
+    # clf = RandomForestClassifier(max_depth=10, n_estimators = 20 )
+    # clf.fit(X_train, y_train)
+    # y_pred = clf.predict(X_test)
+    # error = 1 - np.sum(y_pred == y_test)/len(y_pred)
+    # print("error:%.3f"%error)
+    
+    # from sklearn.model_selection import train_test_split
+    # X_train, X_test, y_train, y_test = train_test_split(rg,loader.cell_labels,test_size = 0.2)
+    # from sklearn.ensemble import RandomForestClassifier
+    # clf = RandomForestClassifier(max_depth=10, n_estimators = 20 )
+    # clf.fit(X_train, y_train)
+    # y_pred = clf.predict(X_test)
+    # error = 1 - np.sum(y_pred == y_test)/len(y_pred)
+    # print("error:%.3f"%error)
+    # raise
+    # ###
+    
+    
+    def worker(run_queue,record):
+        def worker_run(run_i):
+            mix = mix_gene_profile(sim,
+                                   mix_cell_t,
+                                   gene_proportion = args.mix_ratio,
+                                   seed = seed_list[run_i])
+            sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells=mix
+            sim_data = (sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells)
+            aris,accrs = main(sim_data,base_f,run_i,n_cell_type=args.n_type,reduced_dimension=args.hidden)
+            record['aris_gene'] = record['aris_gene']+ [aris[0]]
+            record['aris_sg'] = record['aris_sg'] + [aris[1]]
+            record['accs_gene'] = record['accs_gene'] + [accrs[0]]
+            record['accs_sg'] = record['accs_sg'] + [accrs[1]]
+        if type(run_queue) is int:
+            run_i = run_queue
+            worker_run(run_i)
+        else:
+         while True:
+          try:
+            run_i = run_queue.get(timeout = QUEUE_TIMEOUT)
+            worker_run(run_i)
+          except queue.Empty:
+            return
+
+    if args.n == 1:
+        worker(0,record) #Test mode run in local
+    else:
+        run_queue = queue.Queue()
+        if not n_threads:
+            n_threads = mp.cpu_count()
+        all_proc = []
+        for item in items_to_run:
+            print("Start the %d simulation"%(item))
+            run_queue.put(item)
+        for i in range(n_threads):
+            p = Process(target = worker, args = (run_queue,record))
+            all_proc.append(p)
+            p.start()
+        for p in all_proc:
+            p.join()
     df = pd.DataFrame(record, columns = list(record.keys()))
     with open(os.path.join(base_f,'FICT_result/record.json') , 'w+') as f:
         json.dump(record,f)
@@ -429,7 +512,7 @@ if __name__ == "__main__":
     x1, x2 = 0, 1   # columns 'Sat' and 'Sun' (first column: 0, see plt.xticks())
     y, h, col = df_long['Accuracy'].max() + 0.01, 0.01, 'k'
     plt.plot([x1, x1, x2, x2], [y, y+h, y+h, y], lw=1.5, c=col)
-    p_val = ttest_ind(accs_gene,accs_sg,equal_var = False).pvalue
+    p_val = ttest_ind(record['accs_gene'],record['accs_sg'],equal_var = False).pvalue
     p_val = "{:.2e}".format(p_val)
     plt.text((x1+x2)*.5, y+h, "p=%s"%(p_val), ha='center', va='bottom', color=col)
-    plt.show()
+    plt.savefig()

@@ -1,7 +1,9 @@
 openpyxl
 pandas
+pickle
 numpy
 seaborn
+json
 matplotlib
 sklearn
 anndata

@@ -57,6 +57,8 @@ def read_prior(data_f,n_c,header = 1,gene_col = np.arange(9,164),coor_col = [5,6
     cell_types = data['Cell_class']
     data = data[cell_types!= 'Ambiguous']
     cell_types = data['Cell_class']
+    X = data['Centroid_X'].astype(np.float)
+    Y = data['Centroid_Y'].astype(np.float)
     gene_expression = data.iloc[:,gene_col]
     type_tags = np.unique(cell_types)
     coordinates = data.iloc[:,coor_col]
@@ -74,9 +76,10 @@ def read_prior(data_f,n_c,header = 1,gene_col = np.arange(9,164),coor_col = [5,6
     ### Generate prior from the given dataset.
     gene_mean,gene_std = get_gene_prior(gene_expression,cell_types)
     neighbour_freq_prior,tags,type_count = get_nf_prior(coordinates,cell_types)
-    return gene_mean,gene_std,neighbour_freq_prior,tags,type_count
+    return gene_mean,gene_std,neighbour_freq_prior,tags,type_count,np.asarray([X,Y]).transpose()
 
-def simulation(sample_n = 2000,
+def simulation(sim_folder,
+               sample_n = 2000,
                n_g = 1000,
                n_c = 3,
                density = 20,
@@ -84,66 +87,62 @@ def simulation(sample_n = 2000,
                using_splatter = False,
                method = 0,
                data_f = "datasets/aau5324_Moffitt_Table-S7.xlsx",
+               use_refrence_coordinate = False,
                *args,
                **kwargs):
-
-    if not os.path.isdir("simulation"):
-        os.mkdir("simulation")
+    if not os.path.isdir(sim_folder):
+        os.mkdir(sim_folder)
     methods = ['addictive','exclusive','stripe','real']
-    o_f = join("simulation","%s"%(methods[method]))
+    o_f = join(sim_folder,"%s"%(methods[method]))
     if not os.path.isdir(o_f):
         os.mkdir(o_f)
     if not os.path.isdir(join(o_f,"figures")):
         os.mkdir(join(o_f,"figures"))
+    if (method == 3) | use_refrence_coordinate:
+        gene_mean,gene_std,neighbour_freq_prior,tags,type_count,coor = read_prior(data_f = data_f,n_c = n_c,*args,**kwargs)
     print("######## Begin simulation with %s configuration ########"%(methods[method]))
-    if method == 0:
-    ### Addictive
-        if n_c ==3:
-            target_freq = np.asarray([[7.2,3,2],[2,6,3],[2.5,1,7]])
-        elif n_c==4:
-            target_freq = np.asarray([[7.2,3,2,2],[2,6,3,2],[2.5,1,7,2],[2.5,1,2,7]])
-        elif n_c==5:
-            target_freq = np.asarray([[7.2,3,2,2,2],[2,6,3,2,2],[2.5,1,7,2,2],[2.5,1,2,7,2],[2.5,1,2,2,7]])
+    def addictive_freq(n_c):
+        target_freq = np.ones((n_c,n_c))
+        for i in np.arange(n_c):
+            target_freq[i,i] = 4*(n_c-1)
+        target_freq/np.sum(target_freq,axis=1,keepdims=True)
+        return valid_neighbourhood_frequency(target_freq)[0]
     
-    ### Exclusive
-    elif method==1:
-        if n_c ==3:
-            target_freq = np.asarray([[4,4,1],[4,4,1],[1,1,4]])
-        elif n_c==4:
-            target_freq = np.asarray([[4,4,1,1],[4,4,1,1],[1,1,4,4],[1,1,4,4]])
-        elif n_c==5:
-            target_freq = np.asarray([[4,4,1,1,1],[4,4,1,1,1],[1,1,4,1,1],[1,1,1,4,4],[1,1,1,4,4]])
-    ### Stripe
-    elif method ==2:
-        if n_c ==3:
-            target_freq = np.asarray([[4,4,1],[1,4,4],[1,1,4]])
-        elif n_c==4:
-            target_freq = np.asarray([[4,4,1,1],[4,4,1,1],[1,1,4,4],[1,1,4,4]])
-        elif n_c==5:
-            target_freq = np.asarray([[4,4,1,1,1],[1,4,4,1,1],[1,1,4,4,1],[1,1,1,4,4],[4,1,1,1,4]])
+    def exclusive_freq(n_c):
+        target_freq = np.ones((n_c,n_c))
+        for i in np.arange(n_c):
+            target_freq[i,i] = 3*(n_c-1)
+            if i%2 == 1:
+                target_freq[i-1,i] = 3*(n_c-1)
+                target_freq[i,i-1] = 3*(n_c-1)
+        target_freq/np.sum(target_freq,axis=1,keepdims=True)
+        return valid_neighbourhood_frequency(target_freq)[0]
     
-    ### From real data
-    elif method ==3:
-        gene_mean,gene_std,neighbour_freq_prior,tags,type_count = read_prior(data_f = data_f,n_c = n_c,*args,**kwargs)
+    def stripe_freq(n_c):
+        target_freq = np.ones((n_c,n_c))
+        for i in np.arange(n_c):
+            target_freq[i,i] = 3*(n_c-1)
+            if i>0:
+                target_freq[i-1,i] = 3*(n_c-1)
+        target_freq/np.sum(target_freq,axis=1,keepdims=True)
+        return valid_neighbourhood_frequency(target_freq)[0]
+    def real_freq(n_c):
+        assert len(neighbour_freq_prior) == n_c
         target_freq = np.asarray(neighbour_freq_prior)
-        
+        target_freq/np.sum(target_freq,axis=1,keepdims=True)
+        return valid_neighbourhood_frequency(target_freq)[0]
     
+    freq_map = {0:addictive_freq,1:exclusive_freq,2:stripe_freq,3:real_freq}
+    target_freq = freq_map[method](n_c)
     
-    target_freq = (target_freq)/np.sum(target_freq,axis=1,keepdims=True)
-    result = valid_neighbourhood_frequency(target_freq)
-    target_freq = result[0]
-    
-    ### Assign cell types by neighbourhood assignment
     sim = Simulator(sample_n,n_g,n_c,density)
     sim.gen_parameters(gene_mean_prior = None)
-    sim.gen_coordinate(density = density)
-    #sim.assign_cell_type(target_neighbourhood_frequency=target_freq, 
-    #                     method = "assign-neighbour",
-    #                     max_iter = 30000)
-    #plt.scatter(sim.coor[:,0],sim.coor[:,1], c = sim.cell_type_assignment,s = 20)
-    #plt.title("Cell type assignment after assign_neighbour")
-    #plt.xlabel("X")
-    #plt.ylabel("Y")gen_expression
+    if use_refrence_coordinate:
+        reference_coordinate = coor
+    else:
+        reference_coordinate = None
+    sim.gen_coordinate(density = density,
+                       ref_coor = reference_coordinate)
     
     ### Assign cell types by Gibbs sampling and load
     print("Assign cell type using Gibbs sampling.")
@@ -157,11 +156,12 @@ def simulation(sample_n = 2000,
                          max_iter = 30000,
                          use_exist_assignment = True,
                          annealing = False)
-    plt.scatter(sim.coor[:,0],sim.coor[:,1], c = sim.cell_type_assignment,s = 20)
-    plt.title("Cell type assignment after assign_neighbour")
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.savefig(join(o_f,"figures/Cell_location.png"))
+    fig,axs = plt.subplots()
+    axs.scatter(sim.coor[:,0],sim.coor[:,1], c = sim.cell_type_assignment,s = 20)
+    axs.set_title("Cell type assignment after assign_neighbour")
+    axs.set_xlabel("X")
+    axs.set_ylabel("Y")
+    fig.savefig(join(o_f,"figures/Cell_location.png"))
     
     sim._get_neighbourhood_frequency()
     
@@ -206,15 +206,37 @@ def simulation(sample_n = 2000,
     print(target_freq)
     print("Generated neighbourhood frequency:")
     print(nb_freqs)
+    if use_refrence_coordinate:
+        fig,axs = plt.subplots()
+        axs.scatter(sim.ref_coor[:,0],
+                    sim.ref_coor[:,1],
+                    color = 'red',
+                    label = "All cells.",
+                    s = 1)
+        axs.scatter(sim.coor[:,0],
+                    sim.coor[:,1],
+                    color = 'yellow',
+                    label = "Selected cells.",
+                    s = 1)
+        plt.legend()
+        fig.savefig(join(o_f,"figures/Coordinate_sampling.png"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='FICT-SAMPLE',
                                      description='Generate simulation dataset.')
+    parser.add_argument('-o','--output',required = True,
+                        help = "Output folder.")
     parser.add_argument('--n_type', default = 3,
-                        help="The number type of cells generated.")
-    parser.add_argument("--splatter",action = "store_true")
+                        help = "The number type of cells generated.")
+    parser.add_argument("--splatter",action = "store_true",
+                        help = "If we are going to use splatter.")
+    parser.add_argument("--reference_coordinate", action = "store_true",
+                        help = "If we are going to use the coordinates of\
+                        reference dataset.")
     args = parser.parse_args(sys.argv[1:])
     for method in np.arange(4):
-        simulation(method = method,
+        simulation(args.output,
+                   method = method,
                    n_c = args.n_type,
-                   using_splatter= args.splatter)
+                   using_splatter= args.splatter,
+                   use_refrence_coordinate=args.reference_coordinate)

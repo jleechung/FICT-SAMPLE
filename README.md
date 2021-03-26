@@ -26,14 +26,15 @@ python prepare_osmFISH.py
 python prepare_seqFISH.py
 python prepare_MERFISH.py
 ```
-
 ### Simulation
 ```bash
-python sim_from_real.py
-python dummy_train.py --prefix simulation/addictive
-python dummy_train.py --prefix simulation/exclusive
-python dummy_train.py --prefix simulation/stripe
-python dummy_train.py --prefix simulation/real
+REPEAT=1
+THREADS=1
+python sim_from_real.py --output simulation
+python dummy_train.py --prefix simulation/addictive -n $REPEAT --n_process $THREADS
+python dummy_train.py --prefix simulation/exclusive -n $REPEAT --n_process $THREADS
+python dummy_train.py --prefix simulation/stripe -n $REPEAT --n_process $THREADS
+python dummy_train.py --prefix simulation/real -n $REPEAT --n_process $THREADS
 ```
 
 ### Cross Validation
@@ -50,4 +51,3 @@ python FICT/cross_validation.py -i $DATA/2 -o Benchmark/Merfish/FICT_OUT2/ --ren
 python FICT/cross_validation.py -i $DATA/3 -o Benchmark/Merfish/FICT_OUT3/ --renew_round 40 --n_class 7 -d 20 --spatio_factor 0.1 --mode multi --reduced_method Embedding --embedding_file Benchmark/MERFISH/embedding 
 
 ```
-
