@@ -226,7 +226,7 @@ if __name__ == "__main__":
                                      description='Generate simulation dataset.')
     parser.add_argument('-o','--output',required = True,
                         help = "Output folder.")
-    parser.add_argument('--n_type', default = 3,
+    parser.add_argument('--n_type', default = 3, type = int,
                         help = "The number type of cells generated.")
     parser.add_argument("--splatter",action = "store_true",
                         help = "If we are going to use splatter.")
