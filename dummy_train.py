@@ -23,7 +23,7 @@ from fict.fict_train import permute_accuracy
 from gect.gect_train_embedding import train_wrapper
 from fict.fict_train import alternative_train
 import multiprocessing as mp
-from multiprocessing import Process
+from multiprocessing import Process, Manager
 import queue
 import sys
 import os
@@ -283,7 +283,8 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
                                 update_gene_model = True,
                                 update_spatio_model = False,
                                 stochastic_update=False)
-        predict_gene = np.argmax(posterior_gene,axis=0)
+    predict_gene = np.argmax(posterior_gene,axis=0)
+    np.savetxt(os.path.join(result_f,'label_g.csv'),predict_gene.astype(int))
     accur,perm_gene = permute_accuracy(predict_gene,sim_cell_type)
     ari_gene = adjusted_rand_score(predict_gene,sim_cell_type)
     print("Adjusted rand score of gene model only %.3f"%(ari_gene))
@@ -334,6 +335,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
                                          prior_factor = 0,
                                          equal_contrib = False)
     predict_sg = np.argmax(posterior_sg,axis=0)
+    np.savetxt(os.path.join(result_f,'label_sg.csv'),predict_sg.astype(int))
     ari_sg = adjusted_rand_score(predict_sg,sim_cell_type)
     print("Adjusted rand score of gene+spatio model %.3f"%(ari_sg))
     accr_sg,perm_sg = permute_accuracy(predict_sg,sim_cell_type)
@@ -400,7 +402,8 @@ if __name__ == "__main__":
     RUN_TIME = args.n
     n_threads = args.n_process
     items_to_run = np.arange(RUN_TIME)
-    record = {}
+    manager = Manager()
+    record = manager.dict()
     record['aris_gene'] = []
     record['aris_sg'] = []
     record['accs_gene'] = []
@@ -500,6 +503,7 @@ if __name__ == "__main__":
             p.start()
         for p in all_proc:
             p.join()
+    record = dict(record)
     df = pd.DataFrame(record, columns = list(record.keys()))
     with open(os.path.join(base_f,'FICT_result/record.json') , 'w+') as f:
         json.dump(record,f)
@@ -507,12 +511,12 @@ if __name__ == "__main__":
                       var_name = "Model",
                       value_name = "Accuracy")
     sns.set(style="whitegrid")
-    plt.figure()
-    ax = sns.boxplot(data = df_long,x = "Model",y="Accuracy")
-    x1, x2 = 0, 1   # columns 'Sat' and 'Sun' (first column: 0, see plt.xticks())
+    fig,axs = plt.subplots()
+    ax = sns.boxplot(data = df_long,x = "Model",y="Accuracy",ax = axs)
+    x1, x2 = 0, 1
     y, h, col = df_long['Accuracy'].max() + 0.01, 0.01, 'k'
-    plt.plot([x1, x1, x2, x2], [y, y+h, y+h, y], lw=1.5, c=col)
+    axs.plot([x1, x1, x2, x2], [y, y+h, y+h, y], lw=1.5, c=col)
     p_val = ttest_ind(record['accs_gene'],record['accs_sg'],equal_var = False).pvalue
     p_val = "{:.2e}".format(p_val)
-    plt.text((x1+x2)*.5, y+h, "p=%s"%(p_val), ha='center', va='bottom', color=col)
-    plt.savefig()
+    axs.text((x1+x2)*.5, y+h, "p=%s"%(p_val), ha='center', va='bottom', color=col)
+    fig.savefig(os.path.join(base_f,"FICT_result/accuracy.png"))
