@@ -162,6 +162,12 @@ def accuracy_with_perm(predict,label,perm):
     return accur
 
 def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
+    fict_folder = os.path.join(base_f,'FICT_result/')
+    if not os.path.isdir(fict_folder):
+        os.mkdir(fict_folder)
+    result_f = fict_folder+str(run_idx)
+    if not os.path.isdir(result_f):
+        os.mkdir(result_f)
     sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells = sim_data
     mask = np.zeros(len(sim_cell_type),dtype = np.bool)
     mask[mix_cells] = True
@@ -177,7 +183,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     args = Args()
     args.train_data = os.path.join(base_f,'sim_gene.npz')
     args.eval_data = os.path.join(base_f,'sim_gene.npz')
-    args.log_dir = base_f
+    args.log_dir = result_f
     args.model_name = "simulate_embedding"
     args.embedding_size = reduced_d
     args.batch_size = sim_gene_expression.shape[0]
@@ -188,7 +194,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     args.device = None
     fig_collection = {}
     train_wrapper(args)
-    embedding_file = os.path.join(base_f,'simulate_embedding/')
+    embedding_file = os.path.join(args.log_dir,'simulate_embedding/')
     embedding = emb.load_embedding(embedding_file)
     
     ### Dimensional reduction of simulated gene expression using PCA or embedding
@@ -216,12 +222,6 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
         os.mkdir(data_folder)
     save_smfish(data_loader,data_folder+str(run_idx),is_labeled = True)
     save_loader(data_loader,data_folder+str(run_idx))
-    fict_folder = os.path.join(base_f,'FICT_result/')
-    if not os.path.isdir(fict_folder):
-        os.mkdir(fict_folder)
-    result_f = fict_folder+str(run_idx)
-    if not os.path.isdir(result_f):
-        os.mkdir(result_f)
     plt.figure()
     plt.scatter(sim.coor[:,0],sim.coor[:,1],c = sim_cell_type)
     plt.title("Cell scatter plot.")
