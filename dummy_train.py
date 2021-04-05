@@ -81,7 +81,7 @@ def load_train(data_loader,num_class = None):
                       train_config = TRAIN_CONFIG)
     return model
 
-def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.6,seed = None):
+def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.4,seed = None):
     """mix the gene expression profile of cell types in indexs
     Args:
         simulator: A Simualator instance.
@@ -111,6 +111,29 @@ def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.
                            cov = current_mix_cov,
                            size = len(mix_cell_index))
     return sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,np.asarray(mix_cells)
+
+def swap_non_marker_gene(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.6,seed = None):
+    """mix the gene expression profile of cell types in indexs by swapping.
+    Args:
+        simulator: A Simualator instance.
+        indexs: The indexs of the cell type want to mixd to.
+        gene_proportion: The proportion of genes that being mixed.
+        cell_proportion: The proportion of cells that being mixed.
+        seed: The seed used to generate result
+    """
+    gene_perm = np.arange(sim.gene_n)
+    np.random.shuffle(gene_perm)
+    mix_gene_idx = gene_perm[:int(sim.gene_n*gene_proportion)]
+    sim_gene_expression,sim_cell_type,sim_cell_neighbour = sim.gen_expression(drop_rate = None,seed = seed)
+    cell_perm = [x for x,c in enumerate(sim_cell_type) if c in indexs]
+    np.random.shuffle(cell_perm)
+    cell_perm = cell_perm[:int(len(cell_perm)*cell_proportion)]
+    for i in mix_gene_idx:
+        old_perm = np.copy(cell_perm)
+        np.random.shuffle(cell_perm)
+        sim_gene_expression[cell_perm,:] = sim_gene_expression[old_perm,:]
+    return sim_gene_expression,sim_cell_type,sim_cell_neighbour,None,None,np.asarray(cell_perm)
+
 
 def _plot_freq(neighbour,axes,color,cell_tag):
     sample_n = neighbour.shape[1]
@@ -398,6 +421,8 @@ if __name__ == "__main__":
                         help="Number of processes to use.")
     parser.add_argument('--mix_ratio', default = 0.99, type = float,
                         help="The ratio ")
+    parser.add_argument('--swap_mix',action = "store_true",
+                        help="If mix the non-marker gene with mean-mix or swap-mix.")
     args = parser.parse_args(sys.argv[1:])
     RUN_TIME = args.n
     n_threads = args.n_process
@@ -465,10 +490,16 @@ if __name__ == "__main__":
     
     def worker(run_queue,record):
         def worker_run(run_i):
-            mix = mix_gene_profile(sim,
-                                   mix_cell_t,
-                                   gene_proportion = args.mix_ratio,
-                                   seed = seed_list[run_i])
+            if args.swap_mix:
+                mix = mix_gene_profile(sim,
+                                       mix_cell_t,
+                                       gene_proportion = args.mix_ratio,
+                                       seed = seed_list[run_i])
+            else:
+                mix = swap_non_marker_gene(sim,
+                                           mix_cell_t,
+                                           gene_proportion = args.mix_ratio,
+                                           seed = seed_list[run_i])
             sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells=mix
             sim_data = (sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells)
             aris,accrs = main(sim_data,base_f,run_i,n_cell_type=args.n_type,reduced_dimension=args.hidden)
