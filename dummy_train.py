@@ -189,7 +189,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     if not os.path.isdir(fict_folder):
         os.mkdir(fict_folder)
     result_f = fict_folder+str(run_idx)
-    with open(os.path.join(result_f,'config.json'),'wb+') as f:
+    with open(os.path.join(result_f,'config.json'),'w+') as f:
         json.dump(TRAIN_CONFIG,f)
     if not os.path.isdir(result_f):
         os.mkdir(result_f)
