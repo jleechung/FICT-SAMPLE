@@ -38,7 +38,7 @@ plt.rcParams["font.size"] = "25"
 TRAIN_CONFIG = {'gene_phase':{},'spatio_phase':{}}
 TRAIN_CONFIG['gene_round'] = 20
 TRAIN_CONFIG['spatio_round'] = 10
-TRAIN_CONFIG['both_round'] = 10
+TRAIN_CONFIG['both_round'] = 30
 TRAIN_CONFIG['verbose'] = 1
 TRAIN_CONFIG['gene_phase'] = {'gene_factor':1.0,
                               'spatio_factor':0.0,
@@ -48,8 +48,8 @@ TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
                                 'prior_factor':0.0,
                                 'nearest_k':None,
                                 'threshold_distance':1,
-                                'renew_rounds':10,
-                                'partial_update':0.1,
+                                'renew_rounds':30,
+                                'partial_update':0.05,
                                 'equal_contribute':False}
 QUEUE_TIMEOUT = 1 #Wait for 1 second for the queue to raise empty exception.
 
@@ -189,6 +189,8 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     if not os.path.isdir(fict_folder):
         os.mkdir(fict_folder)
     result_f = fict_folder+str(run_idx)
+    with open(os.path.join(result_f,'config.json'),'wb+') as f:
+        json.dump(TRAIN_CONFIG,f)
     if not os.path.isdir(result_f):
         os.mkdir(result_f)
     sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells = sim_data
