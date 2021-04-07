@@ -24,7 +24,7 @@ from fict.fict_train import permute_accuracy
 from gect.gect_train_embedding import train_wrapper
 from fict.fict_train import alternative_train
 import multiprocessing as mp
-from multiprocessing import Process, Manager
+from multiprocessing import Process, Manager, Queue
 import queue
 import sys
 import os
@@ -34,6 +34,7 @@ import warnings
 import pandas as pd
 from scipy.stats import ttest_ind
 from typing import Callable,Dict,List
+from contextlib import redirect_stdout
 plt.rcParams["font.size"] = "25"
 
 TRAIN_CONFIG = {'gene_phase':{},'spatio_phase':{}}
@@ -53,6 +54,18 @@ TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
                                 'partial_update':1.0,
                                 'equal_contribute':True}
 QUEUE_TIMEOUT = 1 #Wait for 1 second for the queue to raise empty exception.
+
+stdout = sys.__stdout__
+class pid_stdout(object):
+    def __init__(self):
+        self.stdout = stdout
+    def write(self,string):
+        pid = mp.current_process().name
+        new_string = " --%s-- "%(pid) + string
+        state = self.stdout.write(new_string)
+        return state
+sys.stdout = pid_stdout()
+
 
 def load_train(data_loader,num_class = None):
     int_y,tags = tag2int(data_loader.y)
@@ -212,7 +225,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     class Args:
         pass
     args = Args()
-    print(run_idx)
+    print("%d run"%(run_idx))
     args.train_data = os.path.join(result_f,'sim_gene_train.npz')
     args.eval_data = os.path.join(result_f,'sim_gene_test.npz')
     args.log_dir = result_f
@@ -531,7 +544,7 @@ if __name__ == "__main__":
     if args.n == 1:
         worker(0,record) #Test mode run in local
     else:
-        run_queue = queue.Queue()
+        run_queue = Queue()
         if not n_threads:
             n_threads = mp.cpu_count()
         all_proc = []
