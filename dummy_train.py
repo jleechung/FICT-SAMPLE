@@ -50,8 +50,8 @@ TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
                                 'prior_factor':0.0,
                                 'nearest_k':None,
                                 'threshold_distance':1,
-                                'renew_rounds':5,
-                                'partial_update':1.0,
+                                'renew_rounds':30,
+                                'partial_update':0.2,
                                 'equal_contribute':True}
 QUEUE_TIMEOUT = 1 #Wait for 1 second for the queue to raise empty exception.
 
