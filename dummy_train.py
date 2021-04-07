@@ -15,6 +15,7 @@ from fict.utils.data_op import save_loader
 from fict.utils import embedding as emb
 from fict.utils.data_op import tag2int
 from sklearn.metrics.cluster import adjusted_rand_score
+from sklearn.model_selection import train_test_split
 from sklearn import manifold
 from matplotlib import pyplot as plt
 from fict.utils.data_op import one_hot_vector
@@ -48,9 +49,9 @@ TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
                                 'prior_factor':0.0,
                                 'nearest_k':None,
                                 'threshold_distance':1,
-                                'renew_rounds':30,
-                                'partial_update':0.05,
-                                'equal_contribute':False}
+                                'renew_rounds':5,
+                                'partial_update':1.0,
+                                'equal_contribute':True}
 QUEUE_TIMEOUT = 1 #Wait for 1 second for the queue to raise empty exception.
 
 def load_train(data_loader,num_class = None):
@@ -112,7 +113,7 @@ def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.
                            size = len(mix_cell_index))
     return sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,np.asarray(mix_cells)
 
-def swap_non_marker_gene(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.6,seed = None):
+def swap_non_marker_gene(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.4,seed = None):
     """mix the gene expression profile of cell types in indexs by swapping.
     Args:
         simulator: A Simualator instance.
@@ -189,10 +190,10 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     if not os.path.isdir(fict_folder):
         os.mkdir(fict_folder)
     result_f = fict_folder+str(run_idx)
-    with open(os.path.join(result_f,'config.json'),'w+') as f:
-        json.dump(TRAIN_CONFIG,f)
     if not os.path.isdir(result_f):
         os.mkdir(result_f)
+    with open(os.path.join(result_f,'config.json'),'w+') as f:
+        json.dump(TRAIN_CONFIG,f)
     sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells = sim_data
     mask = np.zeros(len(sim_cell_type),dtype = np.bool)
     mask[mix_cells] = True
@@ -200,26 +201,32 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     k_n = n_cell_type
     ### train a embedding model from the simulated gene expression
     print("Begin training the embedding model.")
-    np.savez(os.path.join(base_f,'sim_gene.npz'),
-             feature = sim_gene_expression,
-             labels = sim_cell_type)
+    gene_train,gene_test,type_train,type_test = train_test_split(
+            sim_gene_expression,sim_cell_type,test_size=0.2,random_state=42)
+    np.savez(os.path.join(result_f,'sim_gene_train.npz'),
+             feature = gene_train,
+             labels = type_train)
+    np.savez(os.path.join(result_f,'sim_gene_test.npz'),
+             feature = gene_test,
+             labels = type_test)
     class Args:
         pass
     args = Args()
-    args.train_data = os.path.join(base_f,'sim_gene.npz')
-    args.eval_data = os.path.join(base_f,'sim_gene.npz')
+    print(run_idx)
+    args.train_data = os.path.join(result_f,'sim_gene_train.npz')
+    args.eval_data = os.path.join(result_f,'sim_gene_test.npz')
     args.log_dir = result_f
     args.model_name = "simulate_embedding"
     args.embedding_size = reduced_d
     args.batch_size = sim_gene_expression.shape[0]
     args.step_rate=4e-3
     args.drop_out = 0.9
-    args.epoches = 150
+    args.epoches = 300
     args.retrain = False
     args.device = None
     fig_collection = {}
     train_wrapper(args)
-    embedding_file = os.path.join(args.log_dir,'simulate_embedding/')
+    embedding_file = os.path.join(result_f,'simulate_embedding/')
     embedding = emb.load_embedding(embedding_file)
     
     ### Dimensional reduction of simulated gene expression using PCA or embedding
@@ -444,7 +451,7 @@ if __name__ == "__main__":
         sim = pickle.load(f)
         
     ### mix the gene profile
-    mix_cell_t = [0,1]
+    mix_cell_t = [1,2]
     seed_list = [random.randrange(2**32 - 1) for _ in np.arange(RUN_TIME)]   
     # ### Debugging code
     # run_i = 0
@@ -516,6 +523,7 @@ if __name__ == "__main__":
          while True:
           try:
             run_i = run_queue.get(timeout = QUEUE_TIMEOUT)
+            print("Start the %d simulation."%(run_i))
             worker_run(run_i)
           except queue.Empty:
             return
@@ -528,7 +536,7 @@ if __name__ == "__main__":
             n_threads = mp.cpu_count()
         all_proc = []
         for item in items_to_run:
-            print("Start the %d simulation"%(item))
+            print("Queue the %d simulation"%(item))
             run_queue.put(item)
         for i in range(n_threads):
             p = Process(target = worker, args = (run_queue,record))

@@ -57,10 +57,10 @@ def read_prior(data_f,n_c,header = 1,gene_col = np.arange(9,164),coor_col = [5,6
     cell_types = data['Cell_class']
     data = data[cell_types!= 'Ambiguous']
     cell_types = data['Cell_class']
-    X = data['Centroid_X'].astype(np.float)
-    Y = data['Centroid_Y'].astype(np.float)
     gene_expression = data.iloc[:,gene_col]
-    type_tags = np.unique(cell_types)
+    type_tags,count = np.unique(cell_types,return_counts = True)
+    count_sort = np.argsort(count)[::-1]
+    type_tags = type_tags[count_sort]
     coordinates = data.iloc[:,coor_col]
     ### Choose only the n_c type cells
     print("Choose the subdataset of %d cell types"%(n_c))
@@ -71,12 +71,14 @@ def read_prior(data_f,n_c,header = 1,gene_col = np.arange(9,164),coor_col = [5,6
         mask = np.logical_or(mask,cell_types==tag)
     gene_expression = gene_expression[mask]
     cell_types = np.asarray(cell_types[mask])
+    for i in np.arange(n_c):
+        cell_types[cell_types==type_tags[i]] = i
     coordinates = np.asarray(coordinates[mask])
     
     ### Generate prior from the given dataset.
     gene_mean,gene_std = get_gene_prior(gene_expression,cell_types)
     neighbour_freq_prior,tags,type_count = get_nf_prior(coordinates,cell_types)
-    return gene_mean,gene_std,neighbour_freq_prior,tags,type_count,np.asarray([X,Y]).transpose()
+    return gene_mean,gene_std,neighbour_freq_prior,tags,type_count,coordinates,cell_types
 
 def simulation(sim_folder,
                sample_n = 2000,
@@ -99,7 +101,7 @@ def simulation(sim_folder,
     if not os.path.isdir(join(o_f,"figures")):
         os.mkdir(join(o_f,"figures"))
     if (method == 3) | use_refrence_coordinate:
-        gene_mean,gene_std,neighbour_freq_prior,tags,type_count,coor = read_prior(data_f = data_f,n_c = n_c,*args,**kwargs)
+        gene_mean,gene_std,neighbour_freq_prior,tags,type_count,coor,cell_types = read_prior(data_f = data_f,n_c = n_c,*args,**kwargs)
     print("######## Begin simulation with %s configuration ########"%(methods[method]))
     def addictive_freq(n_c):
         target_freq = np.ones((n_c,n_c))
@@ -141,21 +143,29 @@ def simulation(sim_folder,
         reference_coordinate = coor
     else:
         reference_coordinate = None
-    sim.gen_coordinate(density = density,
-                       ref_coor = reference_coordinate)
+    cell_idxs = sim.gen_coordinate(density = density,
+                                   ref_coor = reference_coordinate)
+    cell_types = cell_types[cell_idxs]
+    print(cell_types.shape)
     
     ### Assign cell types by Gibbs sampling and load
-    print("Assign cell type using Gibbs sampling.")
-    sim.assign_cell_type(target_neighbourhood_frequency=target_freq, 
-                         method = "Gibbs-sampling",
-                         max_iter = 500,
-                         use_exist_assignment = False)
-    print("Refine cell type using Metropolis–Hastings algorithm.")
-    sim.assign_cell_type(target_neighbourhood_frequency=target_freq, 
-                         method = "Metropolis-swap",
-                         max_iter = 30000,
-                         use_exist_assignment = True,
-                         annealing = False)
+    if method == 3:
+        print("Assign cell types using refernece.")
+        sim.assign_cell_type(target_neighbourhood_frequency = target_freq,
+                             method = "Direct-assignment",
+                             ref_assignment = cell_types.astype(int))
+    else:
+        print("Assign cell type using Gibbs sampling.")
+        sim.assign_cell_type(target_neighbourhood_frequency=target_freq, 
+                             method = "Gibbs-sampling",
+                             max_iter = 500,
+                             use_exist_assignment = False)
+        print("Refine cell type using Metropolis–Hastings algorithm.")
+        sim.assign_cell_type(target_neighbourhood_frequency=target_freq, 
+                             method = "Metropolis-swap",
+                             max_iter = 30000,
+                             use_exist_assignment = True,
+                             annealing = False)
     fig,axs = plt.subplots()
     axs.scatter(sim.coor[:,0],sim.coor[:,1], c = sim.cell_type_assignment,s = 20)
     axs.set_title("Cell type assignment after assign_neighbour")
@@ -228,15 +238,25 @@ if __name__ == "__main__":
                         help = "Output folder.")
     parser.add_argument('--n_type', default = 3, type = int,
                         help = "The number type of cells generated.")
+    parser.add_argument('--method', default = None, type = int,
+                        help = "The method used to generate simulation dataset,\
+                        default is None which iterate use all methods.")
     parser.add_argument("--splatter",action = "store_true",
                         help = "If we are going to use splatter.")
     parser.add_argument("--reference_coordinate", action = "store_true",
                         help = "If we are going to use the coordinates of\
                         reference dataset.")
     args = parser.parse_args(sys.argv[1:])
-    for method in np.arange(4):
+    if args.method is None:
+        for method in np.arange(4):
+            simulation(args.output,
+                       method = method,
+                       n_c = args.n_type,
+                       using_splatter= args.splatter,
+                       use_refrence_coordinate=args.reference_coordinate)
+    else:
         simulation(args.output,
-                   method = method,
+                   method = args.method,
                    n_c = args.n_type,
                    using_splatter= args.splatter,
                    use_refrence_coordinate=args.reference_coordinate)
