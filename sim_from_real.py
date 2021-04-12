@@ -50,12 +50,23 @@ def plot_freq(neighbour,axes,color,cell_tag):
     axes.errorbar(x+1,mean,color = color,label = cell_tag)
     return mean,yerror
 
-def read_prior(data_f,n_c,header = 1,gene_col = np.arange(9,164),coor_col = [5,6]):
+def read_prior(data_f,
+               n_c,
+               header = 1,
+               gene_col = np.arange(9,164),
+               coor_col = [5,6],
+               type_gather = None):
     ### Data preprocessing
     print("Reading data from %s"%(data_f))
     data = pd.read_excel(data_f,header = header,engine = 'openpyxl')
     cell_types = data['Cell_class']
-    data = data[cell_types!= 'Ambiguous']
+    if type_gather is not None:
+        mask = cell_types == type_gather[0]
+        for t in type_gather[1:]:
+            mask = np.logical_or(mask,cell_types == t)
+        data = data[mask]
+    else:
+        data = data[cell_types!= 'Ambiguous']
     cell_types = data['Cell_class']
     gene_expression = data.iloc[:,gene_col]
     type_tags,count = np.unique(cell_types,return_counts = True)
@@ -99,7 +110,11 @@ def simulation(sim_folder,
     if not os.path.isdir(join(o_f,"figures")):
         os.mkdir(join(o_f,"figures"))
     if (method == 3) | use_refrence_coordinate:
-        gene_mean,gene_std,neighbour_freq_prior,tags,type_count,coor,cell_types = read_prior(data_f = data_f,n_c = n_c,*args,**kwargs)
+        if n_c == 3:
+            type_gather = ['Inhibitory','Excitatory','Ependymal']
+        else:
+            type_gather = None
+        gene_mean,gene_std,neighbour_freq_prior,tags,type_count,coor,cell_types = read_prior(data_f = data_f,n_c = n_c,type_gather = type_gather,*args,**kwargs)
     print("######## Begin simulation with %s configuration ########"%(methods[method]))
     def addictive_freq(n_c):
         target_freq = np.ones((n_c,n_c))

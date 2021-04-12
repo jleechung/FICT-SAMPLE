@@ -39,17 +39,17 @@ plt.rcParams["font.size"] = "25"
 
 TRAIN_CONFIG = {'gene_phase':{},'spatio_phase':{}}
 TRAIN_CONFIG['gene_round'] = 20
-TRAIN_CONFIG['spatio_round'] = 10
+TRAIN_CONFIG['spatio_round'] = 5
 TRAIN_CONFIG['both_round'] = 10
 TRAIN_CONFIG['verbose'] = 1
 TRAIN_CONFIG['gene_phase'] = {'gene_factor':1.0,
                               'spatio_factor':0.0,
                               'prior_factor':0.0}
 TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
-                                'spatio_factor':0.1,
+                                'spatio_factor':1.0,
                                 'prior_factor':0.0,
                                 'nearest_k':None,
-                                'threshold_distance':1,
+                                'threshold_distance':1.0,
                                 'renew_rounds':10,
                                 'partial_update':1.0,
                                 'equal_contribute':False}
