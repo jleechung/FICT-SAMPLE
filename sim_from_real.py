@@ -66,15 +66,13 @@ def read_prior(data_f,n_c,header = 1,gene_col = np.arange(9,164),coor_col = [5,6
     print("Choose the subdataset of %d cell types"%(n_c))
     if len(type_tags)<n_c:
         raise ValueError("Only %d cell types presented in the dataset, but require %d, reduce the number of cell type assigned."%(len(type_tags),n_c))
-    mask = np.asarray([False]*len(cell_types))
-    for tag in type_tags[:n_c]:
-        mask = np.logical_or(mask,cell_types==tag)
-    gene_expression = gene_expression[mask]
-    cell_types = np.asarray(cell_types[mask])
     for i in np.arange(n_c):
         cell_types[cell_types==type_tags[i]] = i
-    coordinates = np.asarray(coordinates[mask])
-    
+    for tag in type_tags[2:]:
+        cell_types[cell_types==tag] = n_c-1
+        #So we cluster all the additional cell types to third one, to reserve the spatial distribution.
+    cell_types = np.asarray(cell_types)
+    coordinates = np.asarray(coordinates)
     ### Generate prior from the given dataset.
     gene_mean,gene_std = get_gene_prior(gene_expression,cell_types)
     neighbour_freq_prior,tags,type_count = get_nf_prior(coordinates,cell_types)
@@ -145,9 +143,7 @@ def simulation(sim_folder,
         reference_coordinate = None
     cell_idxs = sim.gen_coordinate(density = density,
                                    ref_coor = reference_coordinate)
-    cell_types = cell_types[cell_idxs]
-    print(cell_types.shape)
-    
+    cell_types = cell_types[cell_idxs]    
     ### Assign cell types by Gibbs sampling and load
     if method == 3:
         print("Assign cell types using refernece.")

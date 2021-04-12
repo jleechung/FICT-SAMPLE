@@ -40,19 +40,19 @@ plt.rcParams["font.size"] = "25"
 TRAIN_CONFIG = {'gene_phase':{},'spatio_phase':{}}
 TRAIN_CONFIG['gene_round'] = 20
 TRAIN_CONFIG['spatio_round'] = 10
-TRAIN_CONFIG['both_round'] = 30
+TRAIN_CONFIG['both_round'] = 10
 TRAIN_CONFIG['verbose'] = 1
 TRAIN_CONFIG['gene_phase'] = {'gene_factor':1.0,
                               'spatio_factor':0.0,
                               'prior_factor':0.0}
 TRAIN_CONFIG['spatio_phase'] = {'gene_factor':1.0,
-                                'spatio_factor':1.0,
+                                'spatio_factor':0.1,
                                 'prior_factor':0.0,
                                 'nearest_k':None,
                                 'threshold_distance':1,
-                                'renew_rounds':30,
-                                'partial_update':0.2,
-                                'equal_contribute':True}
+                                'renew_rounds':10,
+                                'partial_update':1.0,
+                                'equal_contribute':False}
 QUEUE_TIMEOUT = 1 #Wait for 1 second for the queue to raise empty exception.
 
 stdout = sys.__stdout__
@@ -64,6 +64,8 @@ class pid_stdout(object):
         new_string = " --%s-- "%(pid) + string
         state = self.stdout.write(new_string)
         return state
+    def flush(self):
+        self.stdout.flush()
 sys.stdout = pid_stdout()
 
 
@@ -95,7 +97,12 @@ def load_train(data_loader,num_class = None):
                       train_config = TRAIN_CONFIG)
     return model
 
-def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.4,seed = None):
+def mix_gene_profile(simulator, 
+                     indexs,
+                     gene_proportion=0.99,
+                     inseparable_cell_proportion = 0.3,
+                     seed = None,
+                     mean_gap = 1.0):
     """mix the gene expression profile of cell types in indexs
     Args:
         simulator: A Simualator instance.
@@ -105,49 +112,57 @@ def mix_gene_profile(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.
         seed: The seed used to generate result
     """
     mix_mean = np.mean(sim.g_mean[indexs,:],axis = 0)
-    mix_cov = np.mean(sim.g_cov[indexs,:,:],axis = 0)
+    mix_cov = np.eye(sim.gene_n)
+    mask = np.zeros(sim.sample_n,dtype = bool)
+    for i,idx in enumerate(indexs):
+        mask = np.logical_or(mask,sim.cell_type_assignment == idx)
     perm = np.arange(sim.gene_n)
-    np.random.shuffle(perm)
-    mix_gene_idx = perm[:int(sim.gene_n*gene_proportion)]
-    mix_cov_idx = tuple(np.meshgrid(mix_gene_idx,mix_gene_idx))
+    n_mix_gene = int(sim.gene_n*gene_proportion)
+    marker_gene_idx = perm[n_mix_gene:]
+    n_marker = len(marker_gene_idx)
     sim_gene_expression,sim_cell_type,sim_cell_neighbour = sim.gen_expression(drop_rate = None,seed = seed)
-    mix_cells = []
-    for i in indexs:
-        current_mix_mean = np.copy(sim.g_mean[i])
-        current_mix_mean[mix_gene_idx] = mix_mean[mix_gene_idx]
-        current_mix_cov = np.copy(sim.g_cov[i])
-        current_mix_cov[mix_cov_idx] = mix_cov[mix_cov_idx]
-        perm = [x for x,c in enumerate(sim_cell_type) if c==i]
-        np.random.shuffle(perm)
-        mix_cell_index = perm[:int(len(perm)*cell_proportion)]
-        mix_cells += mix_cell_index
-        sim_gene_expression[mix_cell_index,:] = np.random.multivariate_normal(mean = current_mix_mean,
-                           cov = current_mix_cov,
-                           size = len(mix_cell_index))
-    return sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,np.asarray(mix_cells)
-
-def swap_non_marker_gene(simulator, indexs,gene_proportion=0.99,cell_proportion = 0.4,seed = None):
-    """mix the gene expression profile of cell types in indexs by swapping.
-    Args:
-        simulator: A Simualator instance.
-        indexs: The indexs of the cell type want to mixd to.
-        gene_proportion: The proportion of genes that being mixed.
-        cell_proportion: The proportion of cells that being mixed.
-        seed: The seed used to generate result
-    """
-    gene_perm = np.arange(sim.gene_n)
-    np.random.shuffle(gene_perm)
-    mix_gene_idx = gene_perm[:int(sim.gene_n*gene_proportion)]
-    sim_gene_expression,sim_cell_type,sim_cell_neighbour = sim.gen_expression(drop_rate = None,seed = seed)
-    cell_perm = [x for x,c in enumerate(sim_cell_type) if c in indexs]
+    cell_perm = np.arange(sim.sample_n)
+    cell_perm = cell_perm[mask]
     np.random.shuffle(cell_perm)
-    cell_perm = cell_perm[:int(len(cell_perm)*cell_proportion)]
-    for i in mix_gene_idx:
-        old_perm = np.copy(cell_perm)
-        np.random.shuffle(cell_perm)
-        sim_gene_expression[cell_perm,:] = sim_gene_expression[old_perm,:]
-    return sim_gene_expression,sim_cell_type,sim_cell_neighbour,None,None,np.asarray(cell_perm)
-
+    mix_cell_index = cell_perm[:int(len(cell_perm)*inseparable_cell_proportion)]
+    # Generate a inseparable cluster first.
+    print("Assign expression level for non-marker genes.")
+    sim_gene_expression[cell_perm,:] = np.random.multivariate_normal(mean = mix_mean,
+                                                                     cov = mix_cov,
+                                                                     size = len(cell_perm))
+    
+    # Normalize the covariance
+    left_cells = np.delete(np.arange(sim.cell_n),indexs)
+    for left in left_cells:
+        n_left = sim.cell_type_assignment==left
+        sim_gene_expression[n_left,:] = np.random.multivariate_normal(mean = sim.g_mean[left],
+                                                                     cov = mix_cov*mean_gap,
+                                                                     size = sum(n_left))
+    
+    
+    # Assign marker gene
+    print("Assign expression level for marker genes.")
+    marker_mean = np.zeros((len(indexs),n_marker))
+    for i in np.arange(n_marker):
+        gene_idx = marker_gene_idx[i]
+        marker_mean[:,i] = np.arange(mix_mean[gene_idx]-mean_gap/2.,
+                                     mix_mean[gene_idx]+mean_gap/2.+mean_gap/len(indexs),
+                                     mean_gap/(len(indexs)-1))
+    for i,idx in enumerate(indexs):
+        i_mask = sim.cell_type_assignment == idx
+        i_mask = np.where(i_mask)[0]
+        sim_gene_expression[i_mask,n_mix_gene:] = np.random.multivariate_normal(mean = marker_mean[i,:],
+                                                                    cov = np.eye(n_marker)*mean_gap,
+                                                                    size = len(i_mask))
+    
+    # Assign inseparable cells
+    print("Assign expression level for inseparable cells.")
+    inseparable_mean = np.mean(marker_mean,axis = 0)
+    sim_gene_expression[mix_cell_index,n_mix_gene:] = np.random.multivariate_normal(mean = inseparable_mean,
+                                                                                    cov = np.eye(n_marker)*mean_gap/2,
+                                                                                    size = len(mix_cell_index))
+    
+    return sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,np.asarray(mix_cell_index)
 
 def _plot_freq(neighbour,axes,color,cell_tag):
     sample_n = neighbour.shape[1]
@@ -216,6 +231,9 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     print("Begin training the embedding model.")
     gene_train,gene_test,type_train,type_test = train_test_split(
             sim_gene_expression,sim_cell_type,test_size=0.2,random_state=42)
+    np.savez(os.path.join(result_f,'sim_gene_all.npz'),
+             feature = sim_gene_expression,
+             labels = sim_cell_type)
     np.savez(os.path.join(result_f,'sim_gene_train.npz'),
              feature = gene_train,
              labels = type_train)
@@ -226,7 +244,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
         pass
     args = Args()
     print("%d run"%(run_idx))
-    args.train_data = os.path.join(result_f,'sim_gene_train.npz')
+    args.train_data = os.path.join(result_f,'sim_gene_all.npz')
     args.eval_data = os.path.join(result_f,'sim_gene_test.npz')
     args.log_dir = result_f
     args.model_name = "simulate_embedding"
@@ -443,8 +461,6 @@ if __name__ == "__main__":
                         help="Number of processes to use.")
     parser.add_argument('--mix_ratio', default = 0.99, type = float,
                         help="The ratio ")
-    parser.add_argument('--swap_mix',action = "store_true",
-                        help="If mix the non-marker gene with mean-mix or swap-mix.")
     args = parser.parse_args(sys.argv[1:])
     RUN_TIME = args.n
     n_threads = args.n_process
@@ -512,16 +528,11 @@ if __name__ == "__main__":
     
     def worker(run_queue,record):
         def worker_run(run_i):
-            if args.swap_mix:
-                mix = mix_gene_profile(sim,
-                                       mix_cell_t,
-                                       gene_proportion = args.mix_ratio,
-                                       seed = seed_list[run_i])
-            else:
-                mix = swap_non_marker_gene(sim,
-                                           mix_cell_t,
-                                           gene_proportion = args.mix_ratio,
-                                           seed = seed_list[run_i])
+            print("Mix non-marker gene expression level.")
+            mix = mix_gene_profile(sim,
+                                   mix_cell_t,
+                                   gene_proportion = args.mix_ratio,
+                                   seed = seed_list[run_i])
             sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells=mix
             sim_data = (sim_gene_expression,sim_cell_type,sim_cell_neighbour,mix_mean,mix_cov,mix_cells)
             aris,accrs = main(sim_data,base_f,run_i,n_cell_type=args.n_type,reduced_dimension=args.hidden)
