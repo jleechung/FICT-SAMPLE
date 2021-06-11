@@ -69,6 +69,28 @@ def read_labels(data_folder,label_idxs):
     labels = np.asarray(labels)
     return labels
 
+def read_gmm_labels(data_folder,label_idxs):
+    labels = []
+    for i in label_idxs:
+        label = []
+        with open(os.path.join(data_folder,str(i)+'/label_g.csv'),'r') as f:
+            for line in f:
+                label.append(int(float(line.strip())))
+        labels.append(label)
+    labels = np.asarray(labels)
+    return labels
+
+def read_fict_labels(data_folder,label_idxs):
+    labels = []
+    for i in label_idxs:
+        label = []
+        with open(os.path.join(data_folder,str(i)+'/label_sg.csv'),'r') as f:
+            for line in f:
+                label.append(int(float(line.strip())))
+        labels.append(label)
+    labels = np.asarray(labels)
+    return labels
+
 def read_smfish_label(result_f,idxs,beta,k=3):
     labels = []
     for i in idxs:
@@ -124,12 +146,12 @@ def heatmap(nb,ax,xticks= None,yticks = None,title = ''):
     for i in range(n):
         for j in range(m):
             text = ax.text(j, i, "%.2f"%(nb[i,j]),
-                           ha="center", va="center", color="w")
+                           ha="center", va="center", color="w",size = 20)
     ax.set_title(title)
     return ax
 
 def coor_scatter(sim,ax,method):
-    ax.scatter(sim.coor[:,0],sim.coor[:,1],c = sim.cell_type_assignment,s=10)
+    ax.scatter(sim.coor[:,0],sim.coor[:,1],c = sim.cell_type_assignment,s=10,cmap="viridis")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
 #    ax.title.set_text(method)
@@ -144,14 +166,18 @@ def main(args):
     x_tick_str = {3:['I','II','III'],
                   4:['I','II','III','IV']}
     repeat = args.repeat
-    figs,axs = plt.subplots(ncols = 3, nrows = 1,figsize = (3.5*5,2.625))
-    figs2,axs2 = plt.subplots(ncols = 3, nrows = 1,figsize = (3.5*5,2.625))
-    figs3,axs3 = plt.subplots(ncols =3, nrows = 1,figsize = (3.5*5,3.5))
+    figs,axs = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (3.5*5,2.625*1.5))
+    figs2,axs2 = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (3.5*5,2.625*1.5))
+    figs3,axs3 = plt.subplots(ncols =args.config_n, nrows = 1,figsize = (3.5*5,3.5))
     for c_i,condition in enumerate(config_str[config_n]):
         print("Extract simulation information for configuration %d: %s"%(c_i,condition))
         ax = axs[c_i]
         ax2 = axs2[c_i]
         base_folder = sim_folder + condition
+        run_list = []
+        for run_i in np.arange(repeat):
+            if os.path.isfile(os.path.join(base_folder,'data/%d.labels'%(run_i))):
+                run_list.append(run_i)
         sim_f = os.path.join(base_folder,'simulator.bin')
         with open(sim_f,'rb') as f:
             sim = pickle.load(f)
@@ -161,18 +187,18 @@ def main(args):
         smfish_result_folder = os.path.join(base_folder,"smfishHmrf_result")
         scanpy_result_folder = os.path.join(base_folder,"scanpy_result")
         seurat_result_folder = os.path.join(base_folder,"SEURAT_result")
-        FICT_result_file = os.path.join(base_folder,"FICT_result/record.json")
-        
-        with open(FICT_result_file,'r') as f:
-            record = json.load(f)
-        gene_accur = record['accs_gene']
-        fict_accur = record['accs_sg']
-        labels = read_labels(data_folder,np.arange(repeat))
-        smfish_labels = read_smfish_label(smfish_result_folder,np.arange(repeat),beta = 3.0,k=cell_type_n)
-        seurat_labels = read_seurat_labels(seurat_result_folder,np.arange(repeat))
+        FICT_result_folder = os.path.join(base_folder,"FICT_result")
+
+        labels = read_labels(data_folder,run_list)
+        gmm_labels = read_gmm_labels(FICT_result_folder,run_list)
+        fict_labels = read_fict_labels(FICT_result_folder,run_list)
+        smfish_labels = read_smfish_label(smfish_result_folder,run_list,beta = 3.0,k=cell_type_n)
+        seurat_labels = read_seurat_labels(seurat_result_folder,run_list)
         smfish_accur = []
         seurat_accur = []
-        for i in np.arange(repeat):
+        gene_accur = []
+        fict_accur = []
+        for i,_ in enumerate(run_list):
             label = labels[i,:]
             if i < len(smfish_labels):
                 smfish_label = smfish_labels[i,:]
@@ -180,17 +206,21 @@ def main(args):
                 smfish_accur.append(accur)
             accur,perms = permute_accuracy(seurat_labels[i],label)
             seurat_accur.append(accur)
-        scanpy_accur = read_scanpy_accuracy(scanpy_result_folder,idxs = np.arange(repeat))
+            accur,perms = permute_accuracy(gmm_labels[i],label)
+            gene_accur.append(accur)
+            accur,perms = permute_accuracy(fict_labels[i],label)
+            fict_accur.append(accur)
+        scanpy_accur = read_scanpy_accuracy(scanpy_result_folder,idxs = run_list)
         gene_accur = np.asarray(gene_accur)
         smfish_accur = np.asarray(smfish_accur)
-        if len(smfish_accur)<repeat:
-            smfish_accur = np.pad(smfish_accur,(0,repeat - len(smfish_accur)),constant_values = None)
+    
+        if len(smfish_accur)<len(run_list):
+            smfish_accur = np.pad(smfish_accur,(0,len(run_list) - len(smfish_accur)),constant_values = None)
         fict_accur = np.asarray(fict_accur)
         scanpy_accur = np.asarray(scanpy_accur)
         seurat_accur = np.asarray(seurat_accur)
         accur_list = [gene_accur,smfish_accur,fict_accur,scanpy_accur,seurat_accur]
         result = {}
-        argsort = np.argsort(gene_accur)
         ### Remove unscessful simulation case whose gene model accuracy is much lower than baseline.
         Threshold_accuracy = 0.6
         mask = gene_accur>Threshold_accuracy
@@ -225,14 +255,26 @@ def main(args):
             ylim0 = ax.get_ylim()
         ylim_current = ax.get_ylim()
         ratio = (ylim_current[1]-ylim_current[0])/(ylim0[1]-ylim0[0])
-        def mark_pval(x1,x2,height,offset,axis):
+        
+        def pval_asterisks(pval):
+            scale = [0.05,0.01,0.001,0.0001]
+            print("pval %f"%(pval))
+            scale.append(float(pval))
+            scale.sort()
+            return '*'*(4-scale.index(pval))
+            
+        def mark_pval(x1,x2,height,offset,axis,asterisks = True):
             height = height*ratio
             offset = offset*ratio
             y, h, col = df_long['Accuracy'].max() + height, height, 'k'
             axis.plot([x1, x1, x2, x2], [y+offset, y+h+offset, y+h+offset, y+offset], c=col)
             p_val1 = ttest_rel(accur_list[x1],accur_list[x2]).pvalue
-            p_val1 = "{:.2e}".format(p_val1)
-            axis.text((x1+x2)*.5, y+h*1.3+offset, "p=%s"%(p_val1), ha='center', va='bottom', color=col)
+            if asterisks:
+                ast = pval_asterisks(p_val1)
+                axis.text((x1+x2)*.5, y+2*h+offset, "%s"%(ast), ha='center', va='center', color=col,size = 10)
+            else:
+                p_val1 = "{:.2e}".format(p_val1)
+                axis.text((x1+x2)*.5, y+offset, "p=%s"%(p_val1), ha='center', va='bottom', color=col)
         mark_pval(0,2,0.004,0.025,ax)
         mark_pval(1,2,0.004,0,ax)
         mark_pval(2,3,0.004,0.030,ax)
@@ -258,9 +300,9 @@ if __name__ == "__main__":
                         help="The input simulation folder, the folder contains simulator.bin file.")
     parser.add_argument('--cell_type_n', type = int, default = 3,
                         help="The number of cell type.")
-    parser.add_argument('--config_n', type = int, default = 4,
+    parser.add_argument('--config_n', type = int, default = 3,
                         help="The number of configurations.")
-    parser.add_argumetn('--repeat', type = int, default = 50,
+    parser.add_argument('--repeat', type = int, default = 50,
                         help="The repeat times of the experiments.")
     args = parser.parse_args(sys.argv[1:])
     main(args)
