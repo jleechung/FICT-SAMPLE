@@ -253,6 +253,7 @@ def main(sim_data,base_f,run_idx,n_cell_type,reduced_dimension):
     args.step_rate=4e-3
     args.drop_out = 0.9
     args.epoches = 300
+    args.threads = 5
     args.retrain = False
     args.device = None
     fig_collection = {}
@@ -458,7 +459,7 @@ if __name__ == "__main__":
     parser.add_argument('--hidden',default = 10,type = int,
                         help="Hidden size of the denoise auto-encoder.")
     parser.add_argument('--n_process', default = None, type = int,
-                        help="Number of processes to use.")
+                        help="Number of processes to use, need to have at least 5 * n_process threads available.")
     parser.add_argument('--mix_ratio', default = 0.99, type = float,
                         help="The ratio ")
     args = parser.parse_args(sys.argv[1:])
