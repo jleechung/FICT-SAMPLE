@@ -47,6 +47,7 @@ def permute_accuracy(predict,y):
     else:
         hits = np.zeros(len(predict_tag))
         average_hits = np.zeros(len(predict_tag))
+        max_hits = np.zeros(len(predict_tag))
         perms = np.zeros(len(predict_tag))
         for predict_i in predict_tag:
             for label_i in label_tag:
@@ -55,8 +56,12 @@ def permute_accuracy(predict,y):
                     hits[predict_i] = hit
                     perms[predict_i] = label_i
                 average_hits[predict_i]+=hit
+                max_hits[predict_i] = hit
             average_hits[predict_i] = (average_hits[predict_i] - hits[predict_i])/(len(predict_tag)-1)
-        return (np.sum(hits)-np.sum(average_hits))/sample_n,perms
+        if len(label_tag) >= len(predict_tag):
+            return (np.sum(hits)-np.sum(average_hits))/sample_n,perms
+        else:
+            return np.sum(max_hits)/sample_n,perms
 
 def read_labels(data_folder,label_idxs):
     labels = []
