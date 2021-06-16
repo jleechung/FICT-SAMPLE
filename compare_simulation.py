@@ -167,9 +167,11 @@ def main(args):
     cell_type_n = args.cell_type_n
     config_n = args.config_n
     config_str = {3:["addictive","exclusive","stripe"],
-                  4:["addictive","exclusive","stripe","real"]}
+                  4:["addictive","exclusive","stripe","real"],
+                  5:["addictive","exclusive","stripe","real","mix"]}
     x_tick_str = {3:['I','II','III'],
-                  4:['I','II','III','IV']}
+                  4:['I','II','III','IV'],
+                  5:['I','II','III','IV','V']}
     repeat = args.repeat
     figs,axs = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (3.5*5,2.625*1.5))
     figs2,axs2 = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (3.5*5,2.625*1.5))
