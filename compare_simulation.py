@@ -55,10 +55,10 @@ def permute_accuracy(predict,y):
                 if hit>hits[predict_i]:
                     hits[predict_i] = hit
                     perms[predict_i] = label_i
+                    max_hits[predict_i] = hit
                 average_hits[predict_i]+=hit
-                max_hits[predict_i] = hit
             average_hits[predict_i] = (average_hits[predict_i] - hits[predict_i])/(len(predict_tag)-1)
-        if len(label_tag) >= len(predict_tag):
+        if len(predict_tag) >= len(label_tag):
             return (np.sum(hits)-np.sum(average_hits))/sample_n,perms
         else:
             return np.sum(max_hits)/sample_n,perms
