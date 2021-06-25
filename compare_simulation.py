@@ -121,6 +121,14 @@ def read_scanpy_accuracy(result_f,idxs):
         accurs.append(accur)
     return accurs
 
+def read_scanpy_labels(result_f,idxs):
+    labels = []
+    for i in idxs:
+        current_f = os.path.join(result_f,'%d/result.hdf5'%(i))
+        adata = anndata.read_h5ad(current_f)
+        labels.append(np.asarray(adata.obs['leiden'],dtype = np.int))
+    return labels
+
 def read_seurat_labels(result_f,idxs):
     labels = []
     for i in idxs:
@@ -172,10 +180,12 @@ def main(args):
     x_tick_str = {3:['I','II','III'],
                   4:['I','II','III','IV'],
                   5:['I','II','III','IV','V']}
+    illustrated_idx = 0 #Scatter plot the first repeat for every condition.
     repeat = args.repeat
-    figs,axs = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (3.5*5,2.625*1.5))
-    figs2,axs2 = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (3.5*5,2.625*1.5))
-    figs3,axs3 = plt.subplots(ncols =args.config_n, nrows = 1,figsize = (3.5*5,3.5))
+    figs,axs = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (4.375*args.config_n,4))
+    figs2,axs2 = plt.subplots(ncols = args.config_n, nrows = 1,figsize = (4.375*args.config_n,4))
+    figs3,axs3 = plt.subplots(ncols =args.config_n, nrows = 1,figsize = (4.375*args.config_n,3.5))
+    figs4,axs4 = plt.subplots(ncols = args.config_n, nrows = 6, figsize = (4.375*args.config_n,3.5*6))
     for c_i,condition in enumerate(config_str[config_n]):
         print("Extract simulation information for configuration %d: %s"%(c_i,condition))
         ax = axs[c_i]
@@ -201,6 +211,32 @@ def main(args):
         fict_labels = read_fict_labels(FICT_result_folder,run_list)
         smfish_labels = read_smfish_label(smfish_result_folder,run_list,beta = 3.0,k=cell_type_n)
         seurat_labels = read_seurat_labels(seurat_result_folder,run_list)
+        scanpy_labels = read_scanpy_labels(scanpy_result_folder,run_list)
+        
+        ## Plot scatter example
+        method_labels = [labels,
+                         gmm_labels,
+                         scanpy_labels,
+                         [x.squeeze() for x in seurat_labels],
+                         smfish_labels,
+                         fict_labels]
+        for m_i,method_label in enumerate(method_labels):
+            ax_current = axs4[m_i,c_i]
+            prediction = method_label[illustrated_idx]
+            pred_n = len(np.unique(prediction))
+            current_label = np.zeros(len(prediction))
+            _,perm = permute_accuracy(prediction,labels[illustrated_idx,:])
+            tag = list(np.arange(pred_n))
+            for i in range(pred_n):
+                if pred_n != args.cell_type_n:
+                    current_label[prediction==i] = perm[i]
+                else:
+                    current_label[prediction == perm[i]] = i
+            ax_current.scatter(sim.coor[:,0],sim.coor[:,1],c = current_label,s=10,cmap="viridis")
+            ax_current.set_xlabel("X")
+            ax_current.set_ylabel("Y")
+        ##
+            
         smfish_accur = []
         seurat_accur = []
         gene_accur = []
@@ -290,6 +326,8 @@ def main(args):
             size=15, weight='bold')
         ax2.text(-0.1, 1.02, string.ascii_uppercase[c_i], transform=ax2.transAxes, 
             size=15, weight='bold')
+        
+        
     for i,ax in enumerate(axs3):
         ax.text(-0.1, 1.02, string.ascii_uppercase[i], transform=ax.transAxes, 
             size=20, weight='bold')
@@ -299,6 +337,7 @@ def main(args):
     figs.savefig("Accuracy.png",bbox_inches='tight',transparent = True)
     figs2.savefig("NeighbourhoodFrequency.png",bbox_inches='tight',transparent = True)
     figs3.savefig("CoordinateScatter.png",transparent = True)
+    figs4.savefig("ClusterScatter.png",transparent = True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='FICT-SAMPLE',
