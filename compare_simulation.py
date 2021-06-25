@@ -117,7 +117,7 @@ def read_scanpy_accuracy(result_f,idxs):
     for i in idxs:
         current_f = os.path.join(result_f,'%d/result.hdf5'%(i))
         adata = anndata.read_h5ad(current_f)
-        accur,perm = permute_accuracy(adata.obs['cell_type'],adata.obs['leiden'])
+        accur,perm = permute_accuracy(adata.obs['leiden'],adata.obs['cell_type'])
         accurs.append(accur)
     return accurs
 
