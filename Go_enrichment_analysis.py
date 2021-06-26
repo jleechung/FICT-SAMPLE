@@ -263,7 +263,7 @@ if __name__ == "__main__":
     class Args:
         pass
     args = Args()
-    args.output = "/home/heavens/twilight/CMU/FICT-SAMPLE/datasets/GO_enrichment_analysis_result/"
+    args.output = "/home/heavens/CMU/FISH_Clustering/FICT-SAMPLE/datasets/GO_enrichment_analysis_result/"
     ##
     
     if not os.path.isdir(args.output):
@@ -272,8 +272,8 @@ if __name__ == "__main__":
     data_f = "./datasets/Moffitt_and_Bambah-Mukku_et_al_merfish_all_cells.csv"
     
     ## INPUT FILES FOR FICT
-    base7_f = "/home/heavens/twilight_data1/MERFISH_data/animal_multi2"
-    base20_f = "/home/heavens/twilight_data1/MERFISH_data/animal_multi4_20class"
+    base7_f = "/home/heavens/BRIDGE_SCRATCH/data/MERFISH_data/cv_result_multi/animal1-4+grid+embedding+ridge_cov/1-4+SF0.1+R30"
+    base20_f = "/home/heavens/BRIDGE_SCRATCH/data/MERFISH_data/cv_result_multi/animal1-4+grid+embedding+ridge_cov/1-4+SF1+R30"
     model7_f = os.path.join(base7_f,'trained_models.bn')
     model20_f = os.path.join(base20_f,'trained_models.bn')
     cv7_f = os.path.join(base7_f,'cv_result.bn')
@@ -339,8 +339,10 @@ if __name__ == "__main__":
     ## EXTRACT THE DIFFERENTIAL EXPRESSED GENES GIVEN COARSE AND FINE CLUSTER
     if CONFIG["DEGENE_METHOD"] == "Deseq2":
         gene_count_full = np.asarray(gene_count_full,dtype = np.int)
+        gene_count_full += 1
     else:
         gene_count_full = np.asarray(gene_count_full,dtype = np.double)
+        gene_count_full += 1e-5
         
     for c,f,m in zip(ec,ef,method):
      for ct in CONFIG["CHOSEN_CELL_TYPES"]:

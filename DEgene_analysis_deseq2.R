@@ -1,6 +1,6 @@
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("DESeq2")
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("DESeq2")
 library( "DESeq2" )
 library(ggplot2)
 DEgene <- function(count_f,meta_f,save_f){
@@ -27,12 +27,9 @@ file.create(save_file)
 write.csv(res,file = save_file,row.names = T,col.names = T)
 }
 }
-
-base <- c("/home/heavens/CMU/FISH_Clustering/FICT_Sample/excitatory_gene/",
-          "/home/heavens/CMU/FISH_Clustering/FICT_Sample/excitatory_spatio/",
-          "/home/heavens/CMU/FISH_Clustering/FICT_Sample/inhabitory_gene/",
-          "/home/heavens/CMU/FISH_Clustering/FICT_Sample/inhabitory_spatio/")
-for (b in base)
-{
-  DEgene(paste(b,'/count.csv',sep=''),paste(b,'/meta.csv',sep=''),b)
+args = commandArgs(trailingOnly=TRUE)
+if (length(args)<2) {
+  stop("Two arguments: input output should be passed to the scripts.n", call.=FALSE)
 }
+DEgene(paste(args[1],'/count.csv',sep=''),paste(args[1],'/meta.csv',sep=''),args[2])
+
