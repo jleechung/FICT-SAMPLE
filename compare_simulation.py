@@ -273,13 +273,14 @@ def main(args):
         result['FICT'] = fict_accur[mask]
         result['Scanpy'] = scanpy_accur[mask]
         result['Seurat'] = seurat_accur[mask]
-        for method in result.keys():
+        methods = ['Scanpy','Seurat','GMM','smfishHmrf','FICT']
+        for method in methods:
             print("%s, %s:%.3f +- %.3f"%(condition, 
                                          method,
                                          np.mean(result[method]),
                                          np.std(result[method])))
-        df = pd.DataFrame(result, columns = list(result.keys()))
-        df_long = pd.melt(df,value_vars = list(result.keys()),
+        df = pd.DataFrame(result, columns = list(methods))
+        df_long = pd.melt(df,value_vars = list(methods),
                           var_name = "Model",
                           value_name = "Accuracy")
         sns.set(style="whitegrid")
@@ -318,10 +319,10 @@ def main(args):
             else:
                 p_val1 = "{:.2e}".format(p_val1)
                 axis.text((x1+x2)*.5, y+offset, "p=%s"%(p_val1), ha='center', va='bottom', color=col)
-        mark_pval(0,2,0.004,0.025,ax)
-        mark_pval(1,2,0.004,0,ax)
-        mark_pval(2,3,0.004,0.030,ax)
-        mark_pval(2,4,0.004,0.005,ax)
+        mark_pval(0,4,0.004,0,ax)
+        mark_pval(1,4,0.004,0.02,ax)
+        mark_pval(2,4,0.004,0.1,ax)
+        mark_pval(3,4,0.004,0.12,ax)
         ax.text(-0.1, 1.02, string.ascii_uppercase[c_i], transform=ax.transAxes, 
             size=15, weight='bold')
         ax2.text(-0.1, 1.02, string.ascii_uppercase[c_i], transform=ax2.transAxes, 
