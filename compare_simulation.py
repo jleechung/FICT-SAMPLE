@@ -13,6 +13,7 @@ from fict.utils import data_op as dop
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
+from matplotlib import lines
 from scipy.stats import ttest_rel
 import pickle
 import string
@@ -262,7 +263,6 @@ def main(args):
         fict_accur = np.asarray(fict_accur)
         scanpy_accur = np.asarray(scanpy_accur)
         seurat_accur = np.asarray(seurat_accur)
-        accur_list = [gene_accur,smfish_accur,fict_accur,scanpy_accur,seurat_accur]
         result = {}
         ### Remove unscessful simulation case whose gene model accuracy is much lower than baseline.
         Threshold_accuracy = 0.6
@@ -274,6 +274,7 @@ def main(args):
         result['Scanpy'] = scanpy_accur[mask]
         result['Seurat'] = seurat_accur[mask]
         methods = ['Scanpy','Seurat','GMM','smfishHmrf','FICT']
+        accur_list = [scanpy_accur,seurat_accur,gene_accur,smfish_accur,fict_accur,]
         for method in methods:
             print("%s, %s:%.3f +- %.3f"%(condition, 
                                          method,
@@ -311,7 +312,9 @@ def main(args):
             height = height*ratio
             offset = offset*ratio
             y, h, col = df_long['Accuracy'].max() + height, height, 'k'
-            axis.plot([x1, x1, x2, x2], [y+offset, y+h+offset, y+h+offset, y+offset], c=col)
+            p_lines = lines.Line2D([x1, x1, x2, x2], [y+offset, y+h+offset, y+h+offset, y+offset], c=col)
+            p_lines.set_clip_on(False)
+            axis.add_line(p_lines)
             p_val1 = ttest_rel(accur_list[x1],accur_list[x2]).pvalue
             if asterisks:
                 ast = pval_asterisks(p_val1)
@@ -320,13 +323,15 @@ def main(args):
                 p_val1 = "{:.2e}".format(p_val1)
                 axis.text((x1+x2)*.5, y+offset, "p=%s"%(p_val1), ha='center', va='bottom', color=col)
         mark_pval(0,4,0.004,0,ax)
-        mark_pval(1,4,0.004,0.02,ax)
-        mark_pval(2,4,0.004,0.1,ax)
-        mark_pval(3,4,0.004,0.12,ax)
-        ax.text(-0.1, 1.02, string.ascii_uppercase[c_i], transform=ax.transAxes, 
-            size=15, weight='bold')
+        mark_pval(1,4,0.004,0.03,ax)
+        mark_pval(2,4,0.004,0.06,ax)
+        mark_pval(3,4,0.004,0.09,ax)
+        ax.set_ylim(top=1.0)
+        ax.set_xlabel("Methods")
+#        ax.text(-0.1, 1.02, string.ascii_uppercase[c_i], transform=ax.transAxes, 
+#            size=20, weight='bold')
         ax2.text(-0.1, 1.02, string.ascii_uppercase[c_i], transform=ax2.transAxes, 
-            size=15, weight='bold')
+            size=20, weight='bold')
         
         
     for i,ax in enumerate(axs3):
