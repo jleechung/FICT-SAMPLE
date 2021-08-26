@@ -44,10 +44,14 @@ python GECT/gect/gect_train_embedding.py -i Benchmark/MERFISH/data/1 -o Benchmar
 DATA=Benchmark/MERFISH/data
 python FICT/cross_validation.py -i $DATA/1,$DATA/2,$DATA/3 -o Benchmark/MERFISH/FICT_CV/ --renew_round 40 --n_class 7 -d $EMBEDDING_SIZE --spatio_factor 0.1 --mode multi --reduced_method Embedding --embedding_file Benchmark/MERFISH/embedding 
 ```
-For direct cell type assignment without cross validation just run each data loader separately, e.g.  
-```bash
-python FICT/cross_validation.py -i $DATA/1 -o Benchmark/Merfish/FICT_OUT1/ --renew_round 40 --n_class 7 -d 20 --spatio_factor 0.1 --mode multi --reduced_method Embedding --embedding_file Benchmark/MERFISH/embedding 
-python FICT/cross_validation.py -i $DATA/2 -o Benchmark/Merfish/FICT_OUT2/ --renew_round 40 --n_class 7 -d 20 --spatio_factor 0.1 --mode multi --reduced_method Embedding --embedding_file Benchmark/MERFISH/embedding 
-python FICT/cross_validation.py -i $DATA/3 -o Benchmark/Merfish/FICT_OUT3/ --renew_round 40 --n_class 7 -d 20 --spatio_factor 0.1 --mode multi --reduced_method Embedding --embedding_file Benchmark/MERFISH/embedding 
 
+### Cell typing
+```bash
+DATA=Benchmark/MERFISH/data/
+python FICT/fict/run.py -i $DATA/0 -o Benchmark/Merfish/FICT_all/ --n_class 7
+```
+
+For the parameters of the cell typing, have a look at the run.py script, and also use help function  
+```bash
+python FICT/fict/run.py --help
 ```

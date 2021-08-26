@@ -12,8 +12,9 @@ import h5py
 import os
 import numpy as np
 from matplotlib import pyplot as plt
-
-def main():
+import argparse
+import sys
+def main(args):
     file1 = "datasets/osmFISH_SScortex_mouse_all_cells.loom"
     f = h5py.File(file1,mode = 'r')
     gene_expression =  np.asarray(f['matrix'])
@@ -32,28 +33,18 @@ def main():
     plt.scatter(x,y,s = 1)
     cell_types = np.asarray(meta['ClusterID'])[zero_mask]
     n_c = len(set(cell_types))
-    if not os.path.isdir("Benchmark/osmFISH"):
-        os.mkdir("Benchmark/osmFISH")
-    save_f = "Benchmark/osmFISH/"
-    smfishHmrf_f = "Benchmark/osmFISH/data/"
+    smfishHmrf_f = args.output
     ### Data preprocessing
     gene_expression = gene_expression/gene_sum
     bregma = np.zeros(len(x))
     split_n = 4
     threshold_distance = 50
-    boarder = np.arange(min(x),max(x)+1,(max(x)-min(x))/4)
+    delta = 1e-4
+    boarder = np.arange(min(x),max(x)+1,float(max(x)+delta-min(x))/split_n)
     for i in np.arange(split_n):
         bregma[np.logical_and(x>boarder[i],x<boarder[i+1])] = i
     for i in np.arange(split_n-1):
         plt.axvline(x=boarder[i+1])
-    real_df = RealDataLoader(gene_expression,
-                             coordinates,
-                             threshold_distance = threshold_distance,
-                             cell_labels = cell_types,
-                             num_class = n_c,
-                             field = bregma,
-                             for_eval = False)
-    dop.save_loader(real_df,save_f+'0')
     for i in np.arange(split_n):
         mask = bregma == i
         loader = RealDataLoader(gene_expression[mask,:],
@@ -66,6 +57,24 @@ def main():
                                 for_eval = False)
         dop.save_loader(loader,smfishHmrf_f+str(i+1))
         dop.save_smfish(loader,smfishHmrf_f+str(i+1))
+        plt.scatter(coordinates[mask,:][:,0],coordinates[mask,:][:,1],s = 1)
+        plt.savefig(smfishHmrf_f+'scatter_%d.png'%(i+1))
+    loader_all = RealDataLoader(gene_expression,
+                                coordinates,
+                                threshold_distance = threshold_distance,
+                                cell_labels = cell_types,
+                                num_class = n_c,
+                                field = bregma,
+                                gene_list = genes,
+                                for_eval = False)
+    dop.save_loader(loader_all,smfishHmrf_f+'0')
+    dop.save_smfish(loader_all,smfishHmrf_f+'0')
         
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(prog='osmFISH',
+                                     description='smfishHmrf crossvalidation code.')
+    parser.add_argument('-o','--output', default = "Benchmark/osmFISH/data/",
+                        help="The output folder")
+    args = parser.parse_args(sys.argv[1:])
+    os.makedirs(args.output,exist_ok=True)
+    main(args)
