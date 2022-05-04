@@ -48,7 +48,7 @@ def check_key(data, colname):
     '''
     if colname is not None:
         if colname not in data.columns:
-            raise KeyError('%s not found in data columns %' colname)
+            raise KeyError('%s not found in data columns' % colname)
         return data[colname]
     return None
 
@@ -99,7 +99,7 @@ def main(args):
                              field = bregma,
                              for_eval = False)
 
-    dop.save_loader(real_df, args.output
+    dop.save_loader(real_df, args.output)
     dop.save_smfish(real_df, args.output)
 
 if __name__ == "__main__":
