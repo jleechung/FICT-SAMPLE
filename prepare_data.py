@@ -57,7 +57,7 @@ def main(args):
     # Hyper parameter setting
     print("Setting hyper parameters")
     ## Parse args
-    n_c = args.n_typee
+    n_c = args.n_type
     threshold_distance = args.thres_dist
     gene_col = process_range(args.gene_cols)
     coord_col = process_range(args.coord_cols)
